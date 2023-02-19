@@ -7,6 +7,8 @@ import React, {
 } from "react";
 import "./App.css";
 
+import { Chart } from "./Chart";
+
 function App() {
   return (
     <AudioContextProvider>
@@ -94,28 +96,35 @@ const Player = () => {
           >
             {isPlaying ? "stop" : "play"}
           </button>
-          <button
-            onClick={() => {
-              player.api.setTrack1Gain(1);
-              player.api.setTrack2Gain(0);
-            }}
-          >
-            play 1
-          </button>
-          <button
-            onClick={() => {
-              player.api.setTrack1Gain(0);
-              player.api.setTrack2Gain(1);
-            }}
-          >
-            play 2
-          </button>
+          <div>
+            <button
+              onClick={() => {
+                player.api.setTrack1Gain(1);
+                player.api.setTrack2Gain(0);
+              }}
+            >
+              eq off
+            </button>
+            <button
+              onClick={() => {
+                player.api.setTrack1Gain(0);
+                player.api.setTrack2Gain(1);
+              }}
+            >
+              eq on
+            </button>
+          </div>
         </div>
       );
     }
   };
 
-  return <div>{renderState()}</div>;
+  return (
+    <div style={{ padding: 50 }}>
+      <Chart />
+      <div>{renderState()}</div>
+    </div>
+  );
 };
 
 const createAudioContext = (): AudioContext => {
@@ -161,12 +170,6 @@ interface Track {
 export interface PlayerState {
   track1: Track;
   track2: Track;
-  // track1buffer: AudioBuffer | null;
-  // track1bufferSourceNode: AudioBufferSourceNode | null;
-  // track1GainNode: GainNode | null;
-  // track2buffer: AudioBuffer | null;
-  // track2bufferSourceNode: AudioBufferSourceNode | null;
-  // track2GainNode: GainNode | null;
 
   mixerNode: GainNode | null;
   isPlaying: boolean;
@@ -226,22 +229,18 @@ export const PlayerStoreProvider: React.FC<PropsWithChildren> = ({
     if (audioContext) {
       const state = refState.current;
 
-      const mixerNode = audioContext.createGain();
-      mixerNode.gain.value = 1;
+      state.mixerNode = audioContext.createGain();
+      state.mixerNode.gain.value = 1;
 
-      const track1GainNode = audioContext.createGain();
-      track1GainNode.gain.value = 1;
+      state.track1.gainNode = audioContext.createGain();
+      state.track1.gainNode.gain.value = 1;
 
-      const track2GainNode = audioContext.createGain();
-      track2GainNode.gain.value = 1;
+      state.track2.gainNode = audioContext.createGain();
+      state.track2.gainNode.gain.value = 1;
 
-      state.track1.gainNode = track1GainNode;
-      state.track2.gainNode = track2GainNode;
-      state.mixerNode = mixerNode;
-
-      track1GainNode.connect(mixerNode);
-      track2GainNode.connect(mixerNode);
-      mixerNode.connect(audioContext.destination);
+      state.track1.gainNode.connect(state.mixerNode);
+      state.track2.gainNode.connect(state.mixerNode);
+      state.mixerNode.connect(audioContext.destination);
     }
   }, [audioContext]);
 
@@ -254,10 +253,11 @@ export const PlayerStoreProvider: React.FC<PropsWithChildren> = ({
     const state = refState.current;
     if (state.track1.bufferSourceNode) {
       state.track1.bufferSourceNode.stop();
-      state.isPlaying = false;
+      state.track1.isPlaying = false;
     }
     if (state.track2.bufferSourceNode) {
       state.track2.bufferSourceNode.stop();
+      state.track2.isPlaying = false;
     }
   };
 
