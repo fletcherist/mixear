@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import "./App.css";
 
-import { Chart } from "./Chart";
+import { Chart, frequenciesToGuess } from "./Chart";
 
 function App() {
   return (
@@ -29,99 +29,133 @@ const samples = [
   "https://saemple.com/storage/samples/2839775813052493327/1764557945516372387.wav",
 ];
 
+const getRandomSample = () => {
+  return samples[Math.floor(Math.random() * samples.length)];
+};
+
 const Player = () => {
   const player = usePlayer();
-  const [sample, setSample] = useState<string>(
-    samples[Math.floor(Math.random() * samples.length)]
-  );
-  const [playedTrack, setPlayedTrack] = useState<"dry" | "wet">("wet");
+
+  const [sample, setSample] = useState<string>(getRandomSample());
   const [state, setState] = useState<
-    "initial" | "loadingSamples" | "playSound"
+    "initial" | "loadingSamples" | "playSound" | "showResult"
   >("initial");
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const renderState = () => {
-    if (state === "initial") {
-      return (
+  const [frequency, setFrequency] = useState<number>(0);
+
+  const prepareNewGuess = async () => {
+    setState("loadingSamples");
+
+    // peak random frequency from list and boost it
+    const randomFrequency =
+      frequenciesToGuess[Math.floor(Math.random() * frequenciesToGuess.length)];
+
+    const sampleUrl =
+      "https://saemple.com/storage/samples/236009982688876348/488799548479455593.wav";
+    await Promise.all([
+      player.api.prepareTrack1(sampleUrl, {
+        type: "eq",
+        frequency: 0,
+        gain: 0,
+      }),
+      player.api.prepareTrack2(sampleUrl, {
+        type: "eq",
+        frequency: randomFrequency,
+        gain: 10,
+      }),
+    ]);
+
+    setFrequency(randomFrequency);
+
+    // enable only wet track
+    player.api.setTrack1Gain(0);
+    player.api.setTrack2Gain(1);
+
+    setState("playSound");
+
+    player.api.play();
+    setIsPlaying(true);
+  };
+
+  const renderStateInitial = () => {
+    return (
+      <button
+        onClick={async () => {
+          await prepareNewGuess();
+        }}
+      >
+        start
+      </button>
+    );
+  };
+
+  const renderStatePlaySound = () => {
+    return (
+      <div>
         <button
-          onClick={async () => {
-            setState("loadingSamples");
-
-            await Promise.all([
-              player.api.prepareTrack1(
-                "https://saemple.com/storage/samples/236009982688876348/488799548479455593.wav",
-                {
-                  type: "eq",
-                  frequency: 0,
-                  gain: 0,
-                }
-              ),
-              player.api.prepareTrack2(
-                "https://saemple.com/storage/samples/236009982688876348/488799548479455593.wav", //
-                {
-                  type: "eq",
-                  frequency: 5000,
-                  gain: 10,
-                }
-              ),
-            ]);
-
-            // enable only wet track
-            player.api.setTrack1Gain(0);
-            player.api.setTrack2Gain(1);
-
-            setState("playSound");
-
-            player.api.play();
-            setIsPlaying(true);
+          onClick={() => {
+            if (isPlaying) {
+              player.api.stop();
+              setIsPlaying(false);
+            } else {
+              player.api.play();
+              setIsPlaying(true);
+            }
           }}
         >
-          start
+          {isPlaying ? "stop" : "play"}
         </button>
-      );
-    } else if (state === "loadingSamples") {
-      return <div>loading...</div>;
-    } else if (state === "playSound") {
-      return (
+
         <div>
           <button
             onClick={() => {
-              if (isPlaying) {
-                player.api.stop();
-                setIsPlaying(false);
-              } else {
-                player.api.play();
-                setIsPlaying(true);
-              }
+              player.api.setTrack1Gain(1);
+              player.api.setTrack2Gain(0);
             }}
           >
-            {isPlaying ? "stop" : "play"}
+            eq off
           </button>
-          <div>
-            <button
-              onClick={() => {
-                player.api.setTrack1Gain(1);
-                player.api.setTrack2Gain(0);
-              }}
-            >
-              eq off
-            </button>
-            <button
-              onClick={() => {
-                player.api.setTrack1Gain(0);
-                player.api.setTrack2Gain(1);
-              }}
-            >
-              eq on
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              player.api.setTrack1Gain(0);
+              player.api.setTrack2Gain(1);
+            }}
+          >
+            eq on
+          </button>
         </div>
-      );
+      </div>
+    );
+  };
+
+  const renderStateLoadingSamples = () => {
+    return <div>loading...</div>;
+  };
+
+  const renderState = () => {
+    if (state === "initial") {
+      return renderStateInitial();
+    } else if (state === "loadingSamples") {
+      return renderStateLoadingSamples();
+    } else if (state === "playSound") {
+      return renderStatePlaySound();
     }
   };
 
   return (
     <div style={{ padding: 50 }}>
-      <Chart />
+      <Chart
+        frequencyNeedToGuess={state === "showResult" ? frequency : 0}
+        onClick={async (guessedFrequency) => {
+          if (state === "playSound") {
+            player.api.stop();
+            setIsPlaying(false);
+            setState("showResult");
+          } else if (state === "showResult") {
+            await prepareNewGuess();
+          }
+        }}
+      />
       <div>{renderState()}</div>
     </div>
   );
@@ -409,3 +443,31 @@ interface AudioEffectEq {
 type AudioEffect = AudioEffectEq;
 
 export default App;
+
+// minBy from ramda is not suitable here
+export function minBy<T>(
+  select: (obj: T) => string | number,
+  list: T[]
+): T | undefined {
+  if (!list || list.length === 0) {
+    return undefined;
+  }
+  return list.reduce((a, b) => {
+    return select(a) < select(b) ? a : b;
+  });
+}
+
+// returns range of values e.g [start, start + 1, ..., end]
+export const range = (start: number, end: number): number[] => {
+  const res = [];
+  for (let i = start; i <= end; i = i + 1) {
+    res.push(i);
+  }
+  return res;
+};
+
+export function delay(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(undefined), ms);
+  });
+}
