@@ -105,8 +105,11 @@ const Player: React.FC<{
     const randomFrequency =
       frequenciesToGuess[Math.floor(Math.random() * frequenciesToGuess.length)];
 
+    // const sampleUrl =
+    //   "https://saemple.com/storage/samples/236009982688876348/488799548479455593.wav";
     const sampleUrl =
-      "https://saemple.com/storage/samples/236009982688876348/488799548479455593.wav";
+      "https://storage.googleapis.com/saemple/samples/236009982688876348/488799548479455593.wav";
+
     await Promise.all([
       player.api.prepareTrack1(sampleUrl, {
         type: "eq",
