@@ -1,23 +1,29 @@
 import React, {
   PropsWithChildren,
+  useCallback,
   useContext,
   useEffect,
   useRef,
   useState,
 } from "react";
-import "./App.css";
 
-import { Chart, frequenciesToGuess } from "./Chart";
+import { Chart } from "../Chart";
+import { frequenciesToGuess } from "../../utils";
+import { ToggleEq } from "../Components";
+import { ChartState } from "../Chart/Chart";
 
-function App() {
+export const App: React.FC<{
+  width: number;
+  height: number;
+}> = ({ width, height }) => {
   return (
     <AudioContextProvider>
       <PlayerStoreProvider>
-        <Player />
+        <Player width={width} height={height} />
       </PlayerStoreProvider>
     </AudioContextProvider>
   );
-}
+};
 
 const sampleInstasamka =
   "https://saemple.com/storage/samples/364658335828877324/884338350415985227.wav";
@@ -33,19 +39,68 @@ const getRandomSample = () => {
   return samples[Math.floor(Math.random() * samples.length)];
 };
 
-const Player = () => {
+const Player: React.FC<{
+  width: number;
+  height: number;
+}> = ({ width, height }) => {
   const player = usePlayer();
 
   const [sample, setSample] = useState<string>(getRandomSample());
-  const [state, setState] = useState<
-    "initial" | "loadingSamples" | "playSound" | "showResult"
-  >("initial");
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [frequency, setFrequency] = useState<number>(0);
+  const [eqEnabled, setEqEnabled] = useState<boolean>(true);
+  const [chartState, setChartState] = useState<ChartState>({ type: "initial" });
+
+  const gainOn = 0.9;
+  const enableEq = () => {
+    player.api.setTrack1Gain(0);
+    player.api.setTrack2Gain(gainOn);
+    setEqEnabled(true);
+  };
+  const disableEq = () => {
+    player.api.setTrack1Gain(gainOn);
+    player.api.setTrack2Gain(0);
+    setEqEnabled(false);
+  };
+  const toggleEq = useCallback(
+    (isActive: boolean) => {
+      if (isActive) {
+        player.api.setTrack1Gain(0);
+        player.api.setTrack2Gain(gainOn);
+      } else {
+        player.api.setTrack1Gain(gainOn);
+        player.api.setTrack2Gain(0);
+      }
+      setEqEnabled(isActive);
+    },
+    [player.api]
+  );
+  // toogle eq using space key
+  useEffect(() => {
+    const handleKeypress = (event: KeyboardEvent) => {
+      if (event.code === "Space") {
+        event.preventDefault();
+
+        if (chartState.type === "selectingFrequency") {
+          toggleEq(!eqEnabled);
+        } else if (chartState.type === "frequencySelected") {
+          // continue with next sample
+          const asyncPrepareNewGuess = async () => {
+            setChartState({ type: "loadingSamples" });
+            await prepareNewGuess();
+            setChartState({ type: "selectingFrequency" });
+          };
+          asyncPrepareNewGuess();
+        }
+      }
+    };
+    window.addEventListener("keypress", handleKeypress);
+
+    return () => {
+      window.removeEventListener("keypress", handleKeypress);
+    };
+  }, [eqEnabled, toggleEq, chartState.type]);
 
   const prepareNewGuess = async () => {
-    setState("loadingSamples");
-
     // peak random frequency from list and boost it
     const randomFrequency =
       frequenciesToGuess[Math.floor(Math.random() * frequenciesToGuess.length)];
@@ -57,106 +112,68 @@ const Player = () => {
         type: "eq",
         frequency: 0,
         gain: 0,
+        q: 1,
       }),
       player.api.prepareTrack2(sampleUrl, {
         type: "eq",
         frequency: randomFrequency,
-        gain: 10,
+        gain: 5,
+        q: 1,
       }),
     ]);
 
     setFrequency(randomFrequency);
+    enableEq();
 
     // enable only wet track
     player.api.setTrack1Gain(0);
     player.api.setTrack2Gain(1);
 
-    setState("playSound");
-
     player.api.play();
-    setIsPlaying(true);
-  };
-
-  const renderStateInitial = () => {
-    return (
-      <button
-        onClick={async () => {
-          await prepareNewGuess();
-        }}
-      >
-        start
-      </button>
-    );
   };
 
   const renderStatePlaySound = () => {
     return (
       <div>
-        <button
-          onClick={() => {
-            if (isPlaying) {
-              player.api.stop();
-              setIsPlaying(false);
-            } else {
-              player.api.play();
-              setIsPlaying(true);
-            }
-          }}
-        >
-          {isPlaying ? "stop" : "play"}
-        </button>
-
-        <div>
-          <button
-            onClick={() => {
-              player.api.setTrack1Gain(1);
-              player.api.setTrack2Gain(0);
+        <div className="flex justify-center py-4">
+          <ToggleEq
+            isActive={eqEnabled}
+            onChange={(isActive) => {
+              toggleEq(isActive);
             }}
-          >
-            eq off
-          </button>
-          <button
-            onClick={() => {
-              player.api.setTrack1Gain(0);
-              player.api.setTrack2Gain(1);
-            }}
-          >
-            eq on
-          </button>
+          />
         </div>
       </div>
     );
   };
 
-  const renderStateLoadingSamples = () => {
-    return <div>loading...</div>;
-  };
-
-  const renderState = () => {
-    if (state === "initial") {
-      return renderStateInitial();
-    } else if (state === "loadingSamples") {
-      return renderStateLoadingSamples();
-    } else if (state === "playSound") {
-      return renderStatePlaySound();
-    }
-  };
-
   return (
-    <div style={{ padding: 50 }}>
+    <div>
       <Chart
-        frequencyNeedToGuess={state === "showResult" ? frequency : 0}
-        onClick={async (guessedFrequency) => {
-          if (state === "playSound") {
-            player.api.stop();
-            setIsPlaying(false);
-            setState("showResult");
-          } else if (state === "showResult") {
+        width={width}
+        height={height}
+        state={chartState}
+        onRequestChangeState={async (stateChange) => {
+          if (stateChange.type === "clickStart") {
+            setChartState({ type: "loadingSamples" });
             await prepareNewGuess();
+            setChartState({ type: "selectingFrequency" });
+          }
+          if (stateChange.type === "selectFrequency") {
+            player.api.stop();
+            setChartState({
+              type: "frequencySelected",
+              frequencyNeedToGuess: frequency,
+              selectedFrequency: stateChange.frequency,
+            });
+          } else if (stateChange.type === "clickContinue") {
+            setChartState({ type: "loadingSamples" });
+            await prepareNewGuess();
+            setChartState({ type: "selectingFrequency" });
           }
         }}
       />
-      <div>{renderState()}</div>
+      <div>{renderStatePlaySound()}</div>
     </div>
   );
 };
@@ -222,7 +239,6 @@ interface PlayerApi {
 }
 interface PlayerStore {
   state: PlayerState;
-  // update: (partial: Partial<State>) => void;
   api: PlayerApi;
 }
 
@@ -361,6 +377,7 @@ export const PlayerStoreProvider: React.FC<PropsWithChildren> = ({
           eq.type = "peaking";
           eq.frequency.value = effect.frequency;
           eq.gain.value = effect.gain;
+          eq.Q.value = effect.q;
         }
 
         if (state.track2.gainNode) {
@@ -438,36 +455,9 @@ interface AudioEffectEq {
   type: "eq";
   frequency: number;
   gain: number;
+  q: number;
 }
 
 type AudioEffect = AudioEffectEq;
 
 export default App;
-
-// minBy from ramda is not suitable here
-export function minBy<T>(
-  select: (obj: T) => string | number,
-  list: T[]
-): T | undefined {
-  if (!list || list.length === 0) {
-    return undefined;
-  }
-  return list.reduce((a, b) => {
-    return select(a) < select(b) ? a : b;
-  });
-}
-
-// returns range of values e.g [start, start + 1, ..., end]
-export const range = (start: number, end: number): number[] => {
-  const res = [];
-  for (let i = start; i <= end; i = i + 1) {
-    res.push(i);
-  }
-  return res;
-};
-
-export function delay(ms: number) {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(undefined), ms);
-  });
-}
