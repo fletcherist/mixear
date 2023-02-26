@@ -26,13 +26,31 @@ export const App: React.FC<{
 };
 
 const sampleInstasamka =
-  "https://saemple.com/storage/samples/364658335828877324/884338350415985227.wav";
+  "https://saemple.storage.googleapis.com/samples/364658335828877324/884338350415985227.wav";
 const samples = [
-  "https://saemple.com/storage/samples/710542751189738547/028389564039802015.wav",
-  "https://saemple.com/storage/samples/456197260834025431/588304601958060462.wav",
+  "https://saemple.storage.googleapis.com/samples/710542751189738547/028389564039802015.wav",
+  "https://saemple.storage.googleapis.com/samples/456197260834025431/588304601958060462.wav",
   sampleInstasamka,
-  "https://saemple.com/storage/samples/236009982688876348/488799548479455593.wav",
-  "https://saemple.com/storage/samples/2839775813052493327/1764557945516372387.wav",
+  "https://saemple.storage.googleapis.com/samples/236009982688876348/488799548479455593.wav",
+  "https://saemple.storage.googleapis.com/samples/2839775813052493327/1764557945516372387.wav",
+
+  "https://saemple.storage.googleapis.com/samples/612767769831785512/928590085350151463.wav", // slowdive - when the sun hits
+  "https://saemple.storage.googleapis.com/samples/612767769831785512/086081468412168300.wav", // slowdive - when the sun hits
+
+  "https://saemple.storage.googleapis.com/samples/263335366049086998/190397988066996402.wav", // хадн дадн Звёзды на плечах
+  "https://saemple.storage.googleapis.com/samples/263335366049086998/566407676913142410.wav", // хадн дадн Звёзды на плечах
+
+  "https://saemple.storage.googleapis.com/samples/719929847000902526/730623583282046784.wav", // david bowie - blackstar
+  "https://saemple.storage.googleapis.com/samples/719929847000902526/899176951140820102.wav", // david bowie - blackstar
+
+  "https://saemple.storage.googleapis.com/samples/799158622811995158/368535194317543561.wav", // molchat doma
+  "https://saemple.storage.googleapis.com/samples/799158622811995158/630617968201966402.wav",
+  "https://saemple.storage.googleapis.com/samples/799158622811995158/993487251695383202.wav",
+  "https://saemple.storage.googleapis.com/samples/799158622811995158/084871179120338707.wav",
+
+  "https://saemple.storage.googleapis.com/samples/478066222647321484/249584092551980229.wav", // motorama to the south
+  "https://saemple.storage.googleapis.com/samples/478066222647321484/925765934229899042.wav",
+  "https://saemple.storage.googleapis.com/samples/478066222647321484/061537930000358873.wav",
 ];
 
 const getRandomSample = () => {
@@ -107,21 +125,22 @@ const Player: React.FC<{
 
     // const sampleUrl =
     //   "https://saemple.com/storage/samples/236009982688876348/488799548479455593.wav";
-    const sampleUrl =
-      "https://saemple.storage.googleapis.com/samples/236009982688876348/488799548479455593.wav";
+    // const sampleUrl =
+    //   "https://saemple.storage.googleapis.com/samples/236009982688876348/488799548479455593.wav";
+    setSample(getRandomSample());
 
     await Promise.all([
-      player.api.prepareTrack1(sampleUrl, {
+      player.api.prepareTrack1(sample, {
         type: "eq",
         frequency: 0,
         gain: 0,
         q: 1,
       }),
-      player.api.prepareTrack2(sampleUrl, {
+      player.api.prepareTrack2(sample, {
         type: "eq",
         frequency: randomFrequency,
-        gain: 5,
-        q: 1,
+        gain: 10,
+        q: 0.9,
       }),
     ]);
 
@@ -136,12 +155,17 @@ const Player: React.FC<{
   };
 
   const renderStatePlaySound = () => {
+    const isToggleDisabled = chartState.type !== "selectingFrequency";
     return (
       <div>
         <div className="flex justify-center py-4">
           <ToggleEq
+            disabled={isToggleDisabled}
             isActive={eqEnabled}
             onChange={(isActive) => {
+              if (isToggleDisabled) {
+                return;
+              }
               toggleEq(isActive);
             }}
           />
